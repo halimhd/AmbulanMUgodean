@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laporan Layanan AmbulanMu Godean</title>
+  <meta name="description" content="Pengumpulan dan rekap laporan layanan ambulans AmbulanMu Godean">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">🚑</div>
+      <div><strong>AmbulanMu Godean</strong><small>Laporan Layanan</small></div>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-view="formView">📝 Isi Laporan</button>
+      <button class="nav-btn" data-view="dataView">📊 Rekap</button>
+      <button class="nav-btn" data-view="masterView">⚙️ Master</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">SISTEM REKAP PELAYANAN</span>
+        <h1>Laporan Layanan AmbulanMu Godean</h1>
+        <p>Isi satu kali dari HP. Data langsung tersusun rapi untuk kebutuhan admin dan rekap harian.</p>
+      </div>
+      <div class="hero-ambulance">🚑</div>
+    </section>
+
+    <section id="formView" class="view active">
+      <div class="section-head">
+        <div><h2>Pengisian Laporan</h2><p>Kolom bertanda <b>*</b> wajib diisi.</p></div>
+        <button id="duplicateBtn" class="btn secondary">⚡ Duplikat HD kemarin</button>
+      </div>
+
+      <form id="reportForm" class="card">
+        <div class="form-grid">
+          <label>Tanggal <b>*</b><input id="tanggal" name="tanggal" type="date" required></label>
+          <label>Waktu <b>*</b><input id="waktu" name="waktu" type="time" required></label>
+          <label>Keperluan <b>*</b><select id="keperluan" name="keperluan" required></select></label>
+          <label>Nama Pasien <b>*</b><input name="nama" required placeholder="Contoh: Mujiman"></label>
+          <label>Alamat <b>*</b><textarea name="alamat" required placeholder="Alamat pasien"></textarea></label>
+          <label>Crew <b>*</b><select id="crew" name="crew" required></select></label>
+          <label>Armada <b>*</b><select id="armada" name="armada" required></select></label>
+          <label>Titik Jemput <b>*</b>
+            <div class="location-row"><input name="jemput" id="jemput" required placeholder="Contoh: RS PKU Kota"><button type="button" class="map-btn" data-map="jemput">📍 Maps</button></div>
+          </label>
+          <label>Titik Tujuan <b>*</b>
+            <div class="location-row"><input name="tujuan" id="tujuan" required placeholder="Contoh: Gamping Tengah"><button type="button" class="map-btn" data-map="tujuan">📍 Maps</button></div>
+          </label>
+          <label>Kas Masuk (Rp)<input name="kasMasuk" id="kasMasuk" type="number" min="0" step="1000" value="0"></label>
+          <label>Kas Keluar (Rp)<input name="kasKeluar" id="kasKeluar" type="number" min="0" step="1000" value="0"></label>
+          <label>Keterangan Kas Keluar<textarea name="ketKasKeluar" placeholder="Contoh: Parkir, tol, BBM, dll."></textarea></label>
+          <label>Jarak Tempuh (KM)<input name="jarakKm" id="jarakKm" type="number" min="0" step="0.1" placeholder="Isi dari odometer/Maps"></label>
+          <label class="full">Catatan<textarea name="note" placeholder="Keterangan tambahan layanan"></textarea></label>
+          <label class="full">Dokumentasi Foto
+            <input id="foto" name="foto" type="file" accept="image/*" capture="environment">
+            <small>Foto dikompres otomatis sebelum dikirim. Hindari foto dokumen identitas sensitif.</small>
+          </label>
+        </div>
+
+        <div class="route-card">
+          <div><strong>🗺️ Rute layanan</strong><span id="routeText">Titik jemput → titik tujuan</span></div>
+          <button type="button" id="routeBtn" class="btn secondary">Buka rute Google Maps</button>
+        </div>
+
+        <div class="preview" id="photoPreview"></div>
+
+        <div class="motivation">
+          <strong>Tetap semangat melayani umat,</strong>
+          <strong>Memberi untuk Negeri</strong>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="resetBtn" class="btn secondary">↺ Bersihkan</button>
+          <button class="btn primary" type="submit">🚑 Simpan Laporan</button>
+        </div>
+        <div id="status" class="status" role="status"></div>
+      </form>
+    </section>
+
+    <section id="dataView" class="view">
+      <div class="section-head">
+        <div><h2>Rekap Laporan</h2><p>Filter lalu unduh Excel atau salin format WhatsApp.</p></div>
+        <div class="toolbar"><button id="refreshBtn" class="btn secondary">↻ Muat ulang</button><button id="exportBtn" class="btn primary">⬇ Export Excel</button></div>
+      </div>
+      <div class="card filters">
+        <label>Dari <input id="fromDate" type="date"></label>
+        <label>Sampai <input id="toDate" type="date"></label>
+        <label>Cari <input id="search" placeholder="Nama / crew / tujuan"></label>
+      </div>
+      <div class="card table-wrap">
+        <table><thead><tr><th>Tanggal</th><th>Waktu</th><th>Nama</th><th>Keperluan</th><th>Rute</th><th>Armada</th><th>Crew</th><th>Kas Masuk</th><th>Kas Keluar</th><th>KM</th><th>Foto</th><th>Aksi</th></tr></thead>
+        <tbody id="tableBody"><tr><td colspan="12" class="empty">Belum ada data.</td></tr></tbody></table>
+      </div>
+      <div id="detailPanel" class="card detail hidden"></div>
+    </section>
+
+    <section id="masterView" class="view">
+      <div class="section-head"><div><h2>Master Data & Tampilan</h2><p>Admin dapat menyesuaikan daftar crew, armada, dan keperluan. Perubahan master tidak mengubah laporan lama.</p></div></div>
+      <div class="card">
+        <div class="master-grid">
+          <label>Daftar Crew<textarea id="masterCrew" rows="8"></textarea></label>
+          <label>Daftar Armada<textarea id="masterArmada" rows="8"></textarea></label>
+          <label>Daftar Keperluan<textarea id="masterKeperluan" rows="8"></textarea></label>
+        </div>
+        <div class="actions"><button id="saveMasterBtn" class="btn primary">💾 Simpan Master</button></div>
+        <p class="hint">Satu item per baris. Master tersimpan di browser perangkat ini. Untuk master bersama semua driver, isi juga sheet <b>Master</b> pada Google Spreadsheet sesuai panduan.</p>
+      </div>
+      <div class="card layout-card">
+        <h3>Pengaturan tampilan</h3>
+        <p>Struktur menu dasar dibuat tetap agar data lama aman. Bagian ini disiapkan untuk pengembangan drag-and-drop tata letak pada versi berikutnya.</p>
+        <div class="chips"><span>Oranye</span><span>Putih</span><span>Hijau</span><span>Ambulans</span><span>Dedaunan</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>🚑 AmbulanMu Godean · Sistem rekap layanan</div>
+    <div>Tetap semangat melayani umat · Memberi untuk Negeri</div>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>
