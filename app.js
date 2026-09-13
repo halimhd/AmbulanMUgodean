@@ -1,105 +1,42 @@
 // AmbulanMu Godean - frontend
-// Setelah membuat Google Apps Script, isi URL WEB_APP_URL di bawah.
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxAwH-y4cNBuVYYRAiakT6MID4dWbutH1Wsc-kokSScF-7Siv5teQSDLU0z9KXh1jRn9w/exec";
-
-const defaultMaster = {
-  crew:["Rehan","Crew 2","Crew 3"],
-  armada:["R1","R2"],
-  keperluan:["Jemput HD","Antar HD","Rujukan","Antar/Jemput Pasien","Lainnya"]
-};
+const defaultMaster={crew:["Rehan","Crew 2","Crew 3"],armada:["R1","R2"],keperluan:["Jemput HD","Antar HD","Rujukan","Antar/Jemput Pasien","Lainnya"]};
 let reports=[];
-
-const $=s=>document.querySelector(s);
-const $$=s=>[...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-function rupiah(n){return new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(Number(n||0))}
+function rupiah(n){return new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(Number(n||0)).replace(/\s/g,"")}
 function today(){return new Date().toISOString().slice(0,10)}
-function formatDate(s){if(!s)return "-";const [y,m,d]=s.slice(0,10).split("-");return `${d}-${m}-${y}`}
-function getMaster(){
-  try{return {...defaultMaster,...JSON.parse(localStorage.getItem("amb_master")||"{}")}}catch{return defaultMaster}
-}
-function fillSelect(id,items){
-  const el=$(id); el.innerHTML='<option value="">Pilih...</option>'+items.map(x=>`<option>${esc(x)}</option>`).join("");
-}
-function loadMasterUI(){
-  const m=getMaster(); fillSelect("#crew",m.crew); fillSelect("#armada",m.armada); fillSelect("#keperluan",m.keperluan);
-  $("#masterCrew").value=m.crew.join("\n");$("#masterArmada").value=m.armada.join("\n");$("#masterKeperluan").value=m.keperluan.join("\n");
-}
-function defaultForm(){
-  $("#tanggal").value=today(); $("#waktu").value=new Date().toTimeString().slice(0,5);
-}
-function mapsSearch(q){if(!q)return;window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q),"_blank")}
+function formatDate(s){if(!s)return "-";const [y,m,d]=String(s).slice(0,10).split("-");return `${d}-${m}-${y}`}
+function hari(s){return new Date(`${s}T00:00:00`).toLocaleDateString("id-ID",{weekday:"long"})}
+function getMaster(){try{return {...defaultMaster,...JSON.parse(localStorage.getItem("amb_master")||"{}")}}catch{return defaultMaster}}
+function fillSelect(id,items){$(id).innerHTML='<option value="">Pilih...</option>'+items.map(x=>`<option>${esc(x)}</option>`).join("")}
+function loadMasterUI(){const m=getMaster();fillSelect("#crew",m.crew);fillSelect("#armada",m.armada);fillSelect("#keperluan",m.keperluan);$("#masterCrew").value=m.crew.join("\n");$("#masterArmada").value=m.armada.join("\n");$("#masterKeperluan").value=m.keperluan.join("\n")}
+function defaultForm(){$("#tanggal").value=today();$("#waktu").value=new Date().toTimeString().slice(0,5);$("#editId").value="";$("#existingFotoUrl").value="";$("#formTitle").textContent="Pengisian Laporan";$("#saveBtn").textContent="🚑 Simpan Laporan";$("#cancelEditBtn").classList.add("hidden")}
+function mapsSearch(q){if(q)window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q),"_blank")}
 function routeUrl(a,b){return "https://www.google.com/maps/dir/?api=1&origin="+encodeURIComponent(a)+"&destination="+encodeURIComponent(b)}
 function setStatus(msg,ok=true){$("#status").textContent=msg;$("#status").className="status "+(ok?"ok":"err")}
-function localSave(r){const old=JSON.parse(localStorage.getItem("amb_reports")||"[]");old.unshift(r);localStorage.setItem("amb_reports",JSON.stringify(old));reports=old}
-async function compressPhoto(file){
-  if(!file)return null;
-  const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
-  const max=1280,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");
-  c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-  return c.toDataURL("image/jpeg",.72);
-}
-async function postReport(r){
-  if(WEB_APP_URL.startsWith("GANTI_")){localSave(r);return {local:true}}
-  const body=new URLSearchParams(); body.set("payload",JSON.stringify(r));
-  const resp=await fetch(WEB_APP_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body});
-  return await resp.json();
-}
-async function fetchReports(){
-  if(WEB_APP_URL.startsWith("GANTI_")){reports=JSON.parse(localStorage.getItem("amb_reports")||"[]");renderTable();return}
-  try{
-    const res=await fetch(WEB_APP_URL+"?action=list",{cache:"no-store"});
-    reports=await res.json();renderTable();
-  }catch(e){reports=JSON.parse(localStorage.getItem("amb_reports")||"[]");renderTable();setStatus("Gagal mengambil data online. Menampilkan data perangkat.",false)}
-}
-function filtered(){
-  const a=$("#fromDate").value,b=$("#toDate").value,q=$("#search").value.toLowerCase();
-  return reports.filter(r=>(!a||r.tanggal>=a)&&(!b||r.tanggal<=b)&&(!q||[r.nama,r.crew,r.tujuan,r.keperluan,r.armada].join(" ").toLowerCase().includes(q)));
-}
-function renderTable(){
-  const rows=filtered();
-  $("#tableBody").innerHTML=rows.length?rows.map((r,i)=>`<tr>
-  <td>${formatDate(r.tanggal)}</td><td>${esc(r.waktu)}</td><td><b>${esc(r.nama)}</b></td><td>${esc(r.keperluan)}</td>
-  <td>${esc(r.jemput)} → ${esc(r.tujuan)}</td><td>${esc(r.armada)}</td><td>${esc(r.crew)}</td>
-  <td>${rupiah(r.kasMasuk)}</td><td>${rupiah(r.kasKeluar)}${r.ketKasKeluar?`<br><small>${esc(r.ketKasKeluar)}</small>`:""}</td>
-  <td>${esc(r.jarakKm||"-")}</td><td>${r.fotoUrl?`<a href="${esc(r.fotoUrl)}" target="_blank">📷 Lihat</a>`:"-"}</td>
-  <td><button class="table-btn" data-detail="${i}">Detail</button></td></tr>`).join(""):`<tr><td colspan="12" class="empty">Belum ada data sesuai filter.</td></tr>`;
-  $$("#tableBody [data-detail]").forEach(btn=>btn.onclick=()=>showDetail(rows[Number(btn.dataset.detail)]));
-}
-function showDetail(r){
-  const p=$("#detailPanel");p.classList.remove("hidden");
-  p.innerHTML=`<h3>Detail: ${esc(r.nama)}</h3><div class="detail-grid">
-  ${Object.entries({Tanggal:formatDate(r.tanggal),Waktu:r.waktu,Keperluan:r.keperluan,Alamat:r.alamat,"Titik Jemput":r.jemput,"Titik Tujuan":r.tujuan,Armada:r.armada,Crew:r.crew,"Kas Masuk":rupiah(r.kasMasuk),"Kas Keluar":rupiah(r.kasKeluar),"Keterangan Kas Keluar":r.ketKasKeluar||"-","Jarak":(r.jarakKm||"-")+" KM",Catatan:r.note||"-"}).map(([k,v])=>`<div class="detail-item"><b>${esc(k)}</b><br>${esc(v)}</div>`).join("")}</div>
-  <div class="actions"><button class="btn secondary" onclick='navigator.clipboard.writeText(${JSON.stringify(waText(r))});alert("Format WhatsApp tersalin.")'>📋 Copy WhatsApp</button><button class="btn secondary" onclick='window.open(${JSON.stringify(routeUrl(r.jemput,r.tujuan))},"_blank")'>🗺️ Rute</button></div>
-  ${r.fotoUrl?`<p><b>Dokumentasi</b></p><img src="${esc(r.fotoUrl)}" alt="Dokumentasi layanan">`:""}`;
-  p.scrollIntoView({behavior:"smooth",block:"nearest"});
-}
-function waText(r){
- return `*Laporan Layanan AmbulanMu Godean*\\n\\n*Hari* : ${new Date(r.tanggal+"T00:00:00").toLocaleDateString("id-ID",{weekday:"long"})}\\n*Tanggal* : ${formatDate(r.tanggal)}\\n*Waktu* : ${r.waktu} WIB\\n*Keperluan* : ${r.keperluan}\\n*Nama* : ${r.nama}\\n*Alamat* : ${r.alamat}\\n*Titik jemput* : ${r.jemput}\\n*Titik Tujuan* : ${r.tujuan}\\n*Armada* : ${r.armada}\\n*Crew* : ${r.crew}\\n*Kas Masuk* : ${rupiah(r.kasMasuk)}\\n*Kas keluar* : ${rupiah(r.kasKeluar)}${r.ketKasKeluar?` (${r.ketKasKeluar})`:""}\\n*Jarak tempuh* : ${r.jarakKm||"-"} KM\\n*Note* : ${r.note||"-"}\\n\\n*Tetap semangat melayani umat*,\\n*Memberi untuk Negeri*`;
-}
-function exportExcel(){
-  const rows=filtered();const headers=["Tanggal","Waktu","Hari","Keperluan","Nama","Alamat","Titik Jemput","Titik Tujuan","Armada","Crew","Kas Masuk","Kas Keluar","Ket. Kas Keluar","Jarak KM","Catatan","Foto"];
-  const data=rows.map(r=>[r.tanggal,r.waktu,new Date(r.tanggal+"T00:00:00").toLocaleDateString("id-ID",{weekday:"long"}),r.keperluan,r.nama,r.alamat,r.jemput,r.tujuan,r.armada,r.crew,r.kasMasuk,r.kasKeluar,r.ketKasKeluar,r.jarakKm,r.note,r.fotoUrl]);
-  const csv=[headers,...data].map(row=>row.map(x=>`"${String(x??"").replaceAll('"','""')}"`).join(";")).join("\n");
-  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`rekap-ambulance-${today()}.csv`;a.click();
-}
-$("#reportForm").onsubmit=async e=>{
- e.preventDefault();setStatus("Menyimpan laporan...",true);
- try{
-  const fd=new FormData(e.target),r=Object.fromEntries(fd.entries());r.kasMasuk=Number(r.kasMasuk||0);r.kasKeluar=Number(r.kasKeluar||0);r.createdAt=new Date().toISOString();
-  const file=$("#foto").files[0];if(file){r.fotoData=await compressPhoto(file);$("#photoPreview").innerHTML=`<img src="${r.fotoData}" alt="Pratinjau foto">`}
-  const out=await postReport(r); if(!out.local&&!out.ok)throw Error(out.error||"Gagal menyimpan");
-  setStatus("✓ Laporan berhasil disimpan.",true);$("#reportForm").reset();defaultForm();$("#photoPreview").innerHTML="";
- }catch(err){console.error(err);setStatus("Gagal menyimpan: "+err.message,false)}
-};
-$("#resetBtn").onclick=()=>{if(confirm("Bersihkan isian?")){$("#reportForm").reset();defaultForm();$("#photoPreview").innerHTML="";setStatus("")}}
-$("#duplicateBtn").onclick=()=>{
- const last=reports.find(r=>r.keperluan==="Jemput HD"||r.keperluan==="Antar HD"); if(!last){alert("Belum ada laporan HD untuk diduplikat.");return}
- ["nama","alamat","jemput","tujuan","armada","crew","ketKasKeluar","note"].forEach(k=>{const el=$(`[name="${k}"]`);if(el)el.value=last[k]||""});$("#keperluan").value=last.keperluan;$("#kasMasuk").value=last.kasMasuk||0;$("#kasKeluar").value=last.kasKeluar||0;$("#jarakKm").value="";setStatus("Data HD terakhir sudah disalin. Silakan periksa sebelum simpan.",true)
-};
-$$(".map-btn").forEach(b=>b.onclick=()=>mapsSearch($("#"+b.dataset.map).value));
-$("#routeBtn").onclick=()=>{const a=$("#jemput").value,b=$("#tujuan").value;if(a&&b)window.open(routeUrl(a,b),"_blank");else alert("Isi titik jemput dan tujuan terlebih dahulu.")};
-["fromDate","toDate","search"].forEach(id=>$("#"+id).oninput=renderTable);$("#refreshBtn").onclick=fetchReports;$("#exportBtn").onclick=exportExcel;
-$("#saveMasterBtn").onclick=()=>{const m={crew:$("#masterCrew").value.split("\n").map(x=>x.trim()).filter(Boolean),armada:$("#masterArmada").value.split("\n").map(x=>x.trim()).filter(Boolean),keperluan:$("#masterKeperluan").value.split("\n").map(x=>x.trim()).filter(Boolean)};localStorage.setItem("amb_master",JSON.stringify(m));loadMasterUI();alert("Master tersimpan di perangkat ini.")};
-$$(".nav-btn").forEach(b=>b.onclick=()=>{$$(".nav-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");$$(".view").forEach(x=>x.classList.remove("active"));$("#"+b.dataset.view).classList.add("active");if(b.dataset.view==="dataView")fetchReports()});
+function localReports(){return JSON.parse(localStorage.getItem("amb_reports")||"[]")}
+function localSave(r){const old=localReports();old.unshift(r);localStorage.setItem("amb_reports",JSON.stringify(old));reports=old}
+function localUpdate(r){const old=localReports().map(x=>x.id===r.id?{...x,...r}:x);localStorage.setItem("amb_reports",JSON.stringify(old));reports=old}
+async function compressPhoto(file){if(!file)return null;const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>{URL.revokeObjectURL(i.src);res(i)};i.onerror=rej;i.src=URL.createObjectURL(file)});const max=1280,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c.toDataURL("image/jpeg",.72)}
+async function postPayload(payload){if(!WEB_APP_URL||WEB_APP_URL.startsWith("GANTI_")){if(payload.action==="update")localUpdate(payload);else localSave(payload);return {local:true,ok:true}}const body=new URLSearchParams();body.set("payload",JSON.stringify(payload));const resp=await fetch(WEB_APP_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body});return await resp.json()}
+async function fetchReports(){if(!WEB_APP_URL||WEB_APP_URL.startsWith("GANTI_")){reports=localReports();renderTable();return}try{const res=await fetch(WEB_APP_URL+"?action=list",{cache:"no-store"});const data=await res.json();if(!Array.isArray(data))throw Error(data.error||"Data tidak valid");reports=data;renderTable()}catch(e){reports=localReports();renderTable();setStatus("Gagal mengambil data online. Menampilkan data perangkat.",false)}}
+function filtered(){const a=$("#fromDate").value,b=$("#toDate").value,q=$("#search").value.toLowerCase().trim();return reports.filter(r=>(!a||r.tanggal>=a)&&(!b||r.tanggal<=b)&&(!q||[r.nama,r.crew,r.tujuan,r.jemput,r.keperluan,r.armada,r.alamat].join(" ").toLowerCase().includes(q)))}
+function updateDashboard(rows){const masuk=rows.reduce((s,r)=>s+Number(r.kasMasuk||0),0),keluar=rows.reduce((s,r)=>s+Number(r.kasKeluar||0),0),km=rows.reduce((s,r)=>s+Number(r.jarakKm||0),0);$("#statServices").textContent=rows.length;$("#statIn").textContent=rupiah(masuk);$("#statOut").textContent=rupiah(keluar);$("#statBalance").textContent=rupiah(masuk-keluar);$("#statKm").textContent=`${km.toLocaleString("id-ID",{maximumFractionDigits:1})} KM`)}
+function renderTable(){const rows=filtered();updateDashboard(rows);$("#tableBody").innerHTML=rows.length?rows.map((r,i)=>`<tr><td>${formatDate(r.tanggal)}</td><td>${esc(r.waktu)}</td><td><b>${esc(r.nama)}</b></td><td>${esc(r.keperluan)}</td><td>${esc(r.jemput)} → ${esc(r.tujuan)}</td><td>${esc(r.armada)}</td><td>${esc(r.crew)}</td><td>${rupiah(r.kasMasuk)}</td><td>${rupiah(r.kasKeluar)}${r.ketKasKeluar?`<br><small>${esc(r.ketKasKeluar)}</small>`:""}</td><td>${esc(r.jarakKm||"-")}</td><td>${r.fotoUrl?`<button class="photo-link" data-photo="${esc(r.fotoUrl)}">📷 Lihat</button>`:"-"}</td><td><button class="table-btn" data-detail="${i}">Detail</button><button class="table-btn edit" data-edit="${i}">✏️ Edit</button></td></tr>`).join(""):`<tr><td colspan="12" class="empty">Belum ada data sesuai filter.</td></tr>`;$$("#tableBody [data-detail]").forEach(b=>b.onclick=()=>showDetail(rows[Number(b.dataset.detail)]));$$('#tableBody [data-edit]').forEach(b=>b.onclick=()=>editReport(rows[Number(b.dataset.edit)]));$$('#tableBody [data-photo]').forEach(b=>b.onclick=()=>openPhoto(b.dataset.photo))}
+function showDetail(r){const p=$("#detailPanel");p.classList.remove("hidden");p.innerHTML=`<h3>Detail: ${esc(r.nama)}</h3><div class="detail-grid">${Object.entries({Hari:hari(r.tanggal),Tanggal:formatDate(r.tanggal),Waktu:r.waktu?`${r.waktu} WIB`:"-",Keperluan:r.keperluan,Alamat:r.alamat,"Titik Jemput":r.jemput,"Titik Tujuan":r.tujuan,Armada:r.armada,Crew:r.crew,"Kas Masuk":rupiah(r.kasMasuk),"Kas Keluar":rupiah(r.kasKeluar),"Keterangan Kas Keluar":r.ketKasKeluar||"-","Jarak":(r.jarakKm||"-")+" KM",Catatan:r.note||"-"}).map(([k,v])=>`<div class="detail-item"><b>${esc(k)}</b><br>${esc(v)}</div>`).join("")}</div><div class="actions"><button class="btn secondary" id="detailCopy">📋 Copy WhatsApp</button><button class="btn secondary" id="detailWa">📱 Kirim laporan ke WA</button><button class="btn secondary" id="detailRoute">🗺️ Rute</button><button class="btn edit" id="detailEdit">✏️ Edit</button></div>${r.fotoUrl?`<button class="photo-link" id="detailPhoto">📷 Buka dokumentasi</button>`:""}`;$("#detailCopy").onclick=()=>copyWA(r);$("#detailWa").onclick=()=>sendWA(r);$("#detailRoute").onclick=()=>window.open(routeUrl(r.jemput,r.tujuan),"_blank");$("#detailEdit").onclick=()=>editReport(r);if(r.fotoUrl)$("#detailPhoto").onclick=()=>openPhoto(r.fotoUrl);p.scrollIntoView({behavior:"smooth",block:"nearest"})}
+function waText(r){return [`*Laporan Layanan AmbulanMu Godean*`,``,`*Hari*          : ${hari(r.tanggal)}`,`*Tanggal*       : ${formatDate(r.tanggal)}`,`*Waktu*         : ${r.waktu||"-"} WIB`,`*Keperluan*     : ${r.keperluan||"-"}`,`*Nama*          : ${r.nama||"-"}`,`*Alamat*        : ${r.alamat||"-"}`,`*Titik jemput*  : ${r.jemput||"-"}`,`*Titik Tujuan*  : ${r.tujuan||"-"}`,`*Armada*        : ${r.armada||"-"}`,`*Crew*          : ${r.crew||"-"}`,`*Kas Masuk*     : ${rupiah(r.kasMasuk)}`,`*Kas Keluar*    : ${rupiah(r.kasKeluar)}`,`*Ket. Kas Keluar*: ${r.ketKasKeluar||"-"}`,`*Jarak Tempuh*  : ${r.jarakKm||"-"} KM`,`*Note*          : ${r.note||"-"}`,``,`*Tetap semangat melayani umat,*`,`*Memberi untuk Negeri*`].join("\n")}
+async function copyWA(r){try{await navigator.clipboard.writeText(waText(r));alert("Format WhatsApp tersalin.")}catch{alert("Gagal menyalin otomatis. Silakan gunakan tombol Kirim laporan ke WA.")}}
+function sendWA(r){window.open("https://wa.me/?text="+encodeURIComponent(waText(r)),"_blank")}
+function openPhoto(url){$("#modalPhoto").src=url;$("#photoModal").classList.remove("hidden")}
+function closePhoto(){$("#modalPhoto").src="";$("#photoModal").classList.add("hidden")}
+function editReport(r){$$('.nav-btn').forEach(x=>x.classList.remove("active"));$('.nav-btn[data-view="formView"]').classList.add("active");$$('.view').forEach(x=>x.classList.remove("active"));$("#formView").classList.add("active");const f=$("#reportForm");["tanggal","waktu","keperluan","nama","alamat","crew","armada","jemput","tujuan","kasMasuk","kasKeluar","ketKasKeluar","jarakKm","note"].forEach(k=>{const el=f.elements[k];if(el)el.value=r[k]??""});$("#editId").value=r.id||"";$("#existingFotoUrl").value=r.fotoUrl||"";$("#formTitle").textContent="Edit Laporan";$("#saveBtn").textContent="💾 Simpan Perubahan";$("#cancelEditBtn").classList.remove("hidden");$("#photoPreview").innerHTML=r.fotoUrl?`<small>Foto lama tersimpan. Pilih foto baru jika ingin menggantinya.</small><br><button type="button" class="photo-link" id="oldPhotoBtn">📷 Lihat foto lama</button>`:"";if(r.fotoUrl)$("#oldPhotoBtn").onclick=()=>openPhoto(r.fotoUrl);window.scrollTo({top:0,behavior:"smooth"})}
+function exportExcel(){const rows=filtered(),headers=["Tanggal","Waktu","Hari","Keperluan","Nama","Alamat","Titik Jemput","Titik Tujuan","Armada","Crew","Kas Masuk","Kas Keluar","Ket. Kas Keluar","Jarak KM","Catatan","Foto URL"],data=rows.map(r=>[r.tanggal,r.waktu,hari(r.tanggal),r.keperluan,r.nama,r.alamat,r.jemput,r.tujuan,r.armada,r.crew,r.kasMasuk,r.kasKeluar,r.ketKasKeluar,r.jarakKm,r.note,r.fotoUrl]);const csv=[headers,...data].map(row=>row.map(x=>`"${String(x??"").replaceAll('"','""')}"`).join(";")).join("\n");const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`rekap-ambulance-${today()}.csv`;a.click();URL.revokeObjectURL(a.href)}
+$("#reportForm").onsubmit=async e=>{e.preventDefault();setStatus($("#editId").value?"Menyimpan perubahan...":"Menyimpan laporan...",true);try{const fd=new FormData(e.target),r=Object.fromEntries(fd.entries());r.id=r.editId||"";delete r.editId;delete r.existingFotoUrl;r.kasMasuk=Number(r.kasMasuk||0);r.kasKeluar=Number(r.kasKeluar||0);r.jarakKm=Number(r.jarakKm||0);r.createdAt=new Date().toISOString();const file=$("#foto").files[0];if(file){r.fotoData=await compressPhoto(file)}else if($("#existingFotoUrl").value){r.fotoUrl=$("#existingFotoUrl").value}const isEdit=!!r.id; r.action=isEdit?"update":"create";const out=await postPayload(r);if(!out.local&&!out.ok)throw Error(out.error||"Gagal menyimpan");if(!isEdit&&out.id)r.id=out.id;if(out.fotoUrl)r.fotoUrl=out.fotoUrl;if(!isEdit&&!out.local){}setStatus(isEdit?"✓ Perubahan berhasil disimpan.":"✓ Laporan berhasil disimpan.",true);e.target.reset();$("#photoPreview").innerHTML="";defaultForm();await fetchReports()}catch(err){console.error(err);setStatus("Gagal menyimpan: "+err.message,false)}};
+$("#resetBtn").onclick=()=>{if(confirm("Bersihkan isian?")){$("#reportForm").reset();$("#photoPreview").innerHTML="";defaultForm();setStatus("")}};$("#cancelEditBtn").onclick=()=>{$("#reportForm").reset();$("#photoPreview").innerHTML="";defaultForm();setStatus("Edit dibatalkan.",true)};
+$("#duplicateBtn").onclick=()=>{const last=reports.find(r=>r.keperluan==="Jemput HD"||r.keperluan==="Antar HD");if(!last){alert("Belum ada laporan HD untuk diduplikat.");return}["nama","alamat","jemput","tujuan","armada","crew","ketKasKeluar","note"].forEach(k=>{const el=$(`[name="${k}"]`);if(el)el.value=last[k]||""});$("#keperluan").value=last.keperluan;$("#kasMasuk").value=last.kasMasuk||0;$("#kasKeluar").value=last.kasKeluar||0;$("#jarakKm").value="";$("#editId").value="";$("#existingFotoUrl").value="";$("#photoPreview").innerHTML="";setStatus("Data HD terakhir sudah disalin. Silakan periksa sebelum simpan.",true)};
+$$('.map-btn').forEach(b=>b.onclick=()=>mapsSearch($("#"+b.dataset.map).value));$("#routeBtn").onclick=()=>{const a=$("#jemput").value,b=$("#tujuan").value;if(a&&b)window.open(routeUrl(a,b),"_blank");else alert("Isi titik jemput dan tujuan terlebih dahulu.")};$("#jemput").oninput=()=>$("#routeText").textContent=`${$("#jemput").value||"Titik jemput"} → ${$("#tujuan").value||"titik tujuan"}`;$("#tujuan").oninput=()=>$("#routeText").textContent=`${$("#jemput").value||"Titik jemput"} → ${$("#tujuan").value||"titik tujuan"}`;
+["fromDate","toDate","search"].forEach(id=>$("#"+id).oninput=renderTable);$("#refreshBtn").onclick=fetchReports;$("#exportBtn").onclick=exportExcel;$("#saveMasterBtn").onclick=()=>{const m={crew:$("#masterCrew").value.split("\n").map(x=>x.trim()).filter(Boolean),armada:$("#masterArmada").value.split("\n").map(x=>x.trim()).filter(Boolean),keperluan:$("#masterKeperluan").value.split("\n").map(x=>x.trim()).filter(Boolean)};localStorage.setItem("amb_master",JSON.stringify(m));loadMasterUI();alert("Master tersimpan di perangkat ini.")};
+$$('.nav-btn').forEach(b=>b.onclick=()=>{$$('.nav-btn').forEach(x=>x.classList.remove("active"));b.classList.add("active");$$('.view').forEach(x=>x.classList.remove("active"));$("#"+b.dataset.view).classList.add("active");if(b.dataset.view==="dataView")fetchReports()});
+$("#closePhotoModal").onclick=closePhoto;$("#photoModal").onclick=e=>{if(e.target.hasAttribute("data-close-modal"))closePhoto()};document.addEventListener("keydown",e=>{if(e.key==="Escape")closePhoto()});$("#foto").onchange=async()=>{const file=$("#foto").files[0];if(file)try{$("#photoPreview").innerHTML=`<img src="${await compressPhoto(file)}" alt="Pratinjau foto">`}catch{$("#photoPreview").textContent="Foto tidak dapat diproses."}};
 defaultForm();loadMasterUI();fetchReports();
