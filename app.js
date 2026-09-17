@@ -14,7 +14,43 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxAwH-y4cNBuVYYRAia
   const dayName=s=>new Date(`${String(s).slice(0,10)}T00:00:00`).toLocaleDateString("id-ID",{weekday:"long"});
   const getMaster=()=>{try{return {...defaultMaster,...JSON.parse(localStorage.getItem("amb_master")||"{}")}}catch{return {...defaultMaster}}};
   function fillSelect(id,items){const el=$(id);if(!el)return;el.innerHTML='<option value="">Pilih...</option>'+items.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("")}
-  function loadMasterUI(){const m=getMaster();fillSelect("#crew",m.crew);fillSelect("#armada",m.armada);fillSelect("#keperluan",m.keperluan);$("#masterCrew").value=m.crew.join("\n");$("#masterArmada").value=m.armada.join("\n");$("#masterKeperluan").value=m.keperluan.join("\n")}
+  async function loadMasterUI(){
+  try {
+    const res = await fetch(
+      WEB_APP_URL + "?action=master&t=" + Date.now(),
+      { cache: "no-store" }
+    );
+
+    const data = await res.json();
+
+    if (data.ok && data.master) {
+      localStorage.setItem(
+        "amb_master",
+        JSON.stringify(data.master)
+      );
+    }
+  } catch (e) {
+    console.log("Master server tidak dapat diambil:", e);
+  }
+
+  const m = getMaster();
+
+  $("crew").innerHTML =
+    '<option value="">Pilih Crew</option>' +
+    m.crew.map(x => `<option>${x}</option>`).join("");
+
+  $("armada").innerHTML =
+    '<option value="">Pilih Armada</option>' +
+    m.armada.map(x => `<option>${x}</option>`).join("");
+
+  $("keperluan").innerHTML =
+    '<option value="">Pilih Keperluan</option>' +
+    m.keperluan.map(x => `<option>${x}</option>`).join("");
+
+  $("masterCrew").value = m.crew.join("\n");
+  $("masterArmada").value = m.armada.join("\n");
+  $("masterKeperluan").value = m.keperluan.join("\n");
+}
   function defaultForm(){$("#tanggal").value=today();const d=new Date();$("#waktu").value=`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`}
   function setStatus(msg,ok=true){$("#status").textContent=msg;$("#status").className="status "+(msg?(ok?"ok":"err"):"")}
   function mapsSearch(q){if(q)window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q),"_blank","noopener")}
@@ -48,7 +84,47 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxAwH-y4cNBuVYYRAia
     // Rekap
     ["fromDate","toDate","search"].forEach(id=>$("#"+id).addEventListener("input",renderTable));$("#refreshBtn").addEventListener("click",fetchReports);$("#exportBtn").addEventListener("click",()=>{const rows=filtered(),headers=["Tanggal","Waktu","Hari","Keperluan","Nama","Alamat","Titik Jemput","Titik Tujuan","Armada","Crew","Kas Masuk","Kas Keluar","Ket. Kas Keluar","Jarak KM","Note","Foto URL"],data=[headers,...rows.map(r=>[r.tanggal,r.waktu,dayName(r.tanggal),r.keperluan,r.nama,r.alamat,r.jemput,r.tujuan,r.armada,r.crew,r.kasMasuk,r.kasKeluar,r.ketKasKeluar,r.jarakKm,r.note,r.fotoUrl])],csv=data.map(row=>row.map(x=>`"${String(x??"").replaceAll('"','""')}"`).join(";")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download=`rekap-ambulance-${today()}.csv`;a.click()});
     // Master
-    $("#saveMasterBtn").addEventListener("click",()=>{const m={crew:$("#masterCrew").value.split("\n").map(x=>x.trim()).filter(Boolean),armada:$("#masterArmada").value.split("\n").map(x=>x.trim()).filter(Boolean),keperluan:$("#masterKeperluan").value.split("\n").map(x=>x.trim()).filter(Boolean)};localStorage.setItem("amb_master",JSON.stringify(m));loadMasterUI();alert("Master tersimpan di perangkat ini.")});
+    $("saveMasterBtn").addEventListener("click", async ()=>{
+  const master = {
+    crew: $("masterCrew").value
+      .split("\n")
+      .map(x => x.trim())
+      .filter(Boolean),
+
+    armada: $("masterArmada").value
+      .split("\n")
+      .map(x => x.trim())
+      .filter(Boolean),
+
+    keperluan: $("masterKeperluan").value
+      .split("\n")
+      .map(x => x.trim())
+      .filter(Boolean)
+  };
+
+  try {
+    const result = await postPayload({
+      action: "saveMaster",
+      master: master
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error || "Gagal menyimpan Master");
+    }
+
+    localStorage.setItem(
+      "amb_master",
+      JSON.stringify(master)
+    );
+
+    await loadMasterUI();
+
+    alert("Master berhasil disimpan ke server.");
+  } catch (e) {
+    console.error(e);
+    alert("Gagal menyimpan Master: " + e.message);
+  }
+});
     // Modal
     $("#closePhotoModal").addEventListener("click",closePhoto);$("#photoModal").addEventListener("click",e=>{if(e.target.matches("[data-close-modal]"))closePhoto()});document.addEventListener("keydown",e=>{if(e.key==="Escape")closePhoto()});
     defaultForm();loadMasterUI();fetchReports();
