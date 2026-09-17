@@ -15,6 +15,8 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxAwH-y4cNBuVYYRAia
   const getMaster=()=>{try{return {...defaultMaster,...JSON.parse(localStorage.getItem("amb_master")||"{}")}}catch{return {...defaultMaster}}};
   function fillSelect(id,items){const el=$(id);if(!el)return;el.innerHTML='<option value="">Pilih...</option>'+items.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("")}
   async function loadMasterUI(){
+  let m = getMaster();
+
   try {
     const res = await fetch(
       WEB_APP_URL + "?action=master&t=" + Date.now(),
@@ -24,14 +26,51 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxAwH-y4cNBuVYYRAia
     const data = await res.json();
 
     if (data.ok && data.master) {
+      m = {
+        crew: Array.isArray(data.master.crew)
+          ? data.master.crew
+          : m.crew,
+
+        armada: Array.isArray(data.master.armada)
+          ? data.master.armada
+          : m.armada,
+
+        keperluan: Array.isArray(data.master.keperluan)
+          ? data.master.keperluan
+          : m.keperluan
+      };
+
       localStorage.setItem(
         "amb_master",
-        JSON.stringify(data.master)
+        JSON.stringify(m)
       );
     }
   } catch (e) {
-    console.log("Master server tidak dapat diambil:", e);
+    console.error("Gagal mengambil Master dari server:", e);
   }
+
+  $("#crew").innerHTML =
+    '<option value="">Pilih Crew</option>' +
+    m.crew.map(x =>
+      `<option value="${esc(x)}">${esc(x)}</option>`
+    ).join("");
+
+  $("#armada").innerHTML =
+    '<option value="">Pilih Armada</option>' +
+    m.armada.map(x =>
+      `<option value="${esc(x)}">${esc(x)}</option>`
+    ).join("");
+
+  $("#keperluan").innerHTML =
+    '<option value="">Pilih Keperluan</option>' +
+    m.keperluan.map(x =>
+      `<option value="${esc(x)}">${esc(x)}</option>`
+    ).join("");
+
+  $("#masterCrew").value = m.crew.join("\n");
+  $("#masterArmada").value = m.armada.join("\n");
+  $("#masterKeperluan").value = m.keperluan.join("\n");
+}
 
   const m = getMaster();
 
