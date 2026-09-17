@@ -72,24 +72,7 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxAwH-y4cNBuVYYRAia
   $("#masterKeperluan").value = m.keperluan.join("\n");
 }
 
-  const m = getMaster();
 
-  $("#crew").innerHTML =
-    '<option value="">Pilih Crew</option>' +
-    m.crew.map(x => `<option>${x}</option>`).join("");
-
-  $("#armada").innerHTML =
-    '<option value="">Pilih Armada</option>' +
-    m.armada.map(x => `<option>${x}</option>`).join("");
-
-  $("#keperluan").innerHTML =
-    '<option value="">Pilih Keperluan</option>' +
-    m.keperluan.map(x => `<option>${x}</option>`).join("");
-
-  $("#masterCrew").value = m.crew.join("\n");
-  $("#masterArmada").value = m.armada.join("\n");
-  $("#masterKeperluan").value = m.keperluan.join("\n");
-}
   function defaultForm(){$("#tanggal").value=today();const d=new Date();$("#waktu").value=`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`}
   function setStatus(msg,ok=true){$("#status").textContent=msg;$("#status").className="status "+(msg?(ok?"ok":"err"):"")}
   function mapsSearch(q){if(q)window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q),"_blank","noopener")}
